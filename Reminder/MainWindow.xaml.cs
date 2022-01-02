@@ -59,7 +59,9 @@ namespace Reminder
                     int c = int.Parse(line[1]);
                     DateTime date = new DateTime(a, b, c);
 
-                    list.Add(new ReminderItem(date, line[0]));
+                    if (date > DateTime.Now)
+                        list.Add(new ReminderItem(date, line[0]));
+
                 }
                 sr.Close();
             }
@@ -71,7 +73,7 @@ namespace Reminder
             return list;
         }
 
-        void writeList(List<ReminderItem> list)
+        static void writeList(List<ReminderItem> list)
         {
             if (!File.Exists(dataFile.FullName))
             {
@@ -94,8 +96,18 @@ namespace Reminder
             {
                 List<ReminderItem> list = readList();
                 dataGrid.ItemsSource = list;
+
+                try
+                {
+                    textBlock.Text = ReminderItem.daysAndWeeksRemaining(list[0]) + " remaining!!!";
+                }
+                catch (Exception)
+                {
+                    textBlock.Text = "Not really much to look forward too";
+                }
                 
-                textBlock.Text = ReminderItem.daysAndWeeksRemaining(list[0]) + " remaining!!!";
+
+                writeList(list);
             });
         }
         private void OnTimedEventRefreshUpcommingLesson(Object source, ElapsedEventArgs e)
