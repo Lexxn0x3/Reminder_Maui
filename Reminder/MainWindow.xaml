@@ -11,6 +11,7 @@
         AllowsTransparency="True"
         ShowInTaskbar="False"
         Topmost="True"
+        ResizeMode="NoResize"
                   >
     <Window.Resources>
         <SolidColorBrush x:Key="WindowBackground" 
