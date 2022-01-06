@@ -46,8 +46,7 @@ namespace Reminder
 
         public void SaveTimeTable()
         {
-            System.IO.FileInfo dataFile = new System.IO.FileInfo(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @$"{System.IO.Path.DirectorySeparatorChar}Reminder App{System.IO.Path.DirectorySeparatorChar}timetable.dat");
-
+            System.IO.FileInfo dataFile = MainWindow.GetDataFile("data.dat");
             if (File.Exists(dataFile.FullName))
             {
                 StreamWriter sw = new StreamWriter(dataFile.FullName);

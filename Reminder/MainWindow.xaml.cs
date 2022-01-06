@@ -22,8 +22,10 @@ namespace Reminder
     /// </summary>
     public partial class MainWindow : Window
     {
-        static public System.IO.FileInfo dataFile = new System.IO.FileInfo(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @$"{System.IO.Path.DirectorySeparatorChar}Reminder App{System.IO.Path.DirectorySeparatorChar}data.dat");
-        Timer[] timer = new Timer[2];
+        //static public System.IO.FileInfo dataFile =  GetDataFile("data.dat");
+        Timer[] timer = new Timer[3];
+        DateTime timeStart = DateTime.Now;
+        TimeSpan studyTime = TimeSpan.Zero;
         public MainWindow()
         {
             InitializeComponent();
@@ -40,11 +42,19 @@ namespace Reminder
             timer[1].AutoReset = true;
             timer[1].Enabled = true;
 
+            studyTime = ReadStudyTime();
+            OnTimedEventRefreshStudyTime(null, null);
+            timer[2] = new System.Timers.Timer(500);
+            timer[2].Elapsed += OnTimedEventRefreshStudyTime;
+            timer[2].AutoReset = true;
+            timer[2].Enabled = false;
         }
 
         List<ReminderItem> readList()
         {
             List<ReminderItem> list = new List<ReminderItem>();
+
+            FileInfo dataFile = GetDataFile("data.dat");
 
             if (File.Exists(dataFile.FullName))
             {
@@ -75,6 +85,8 @@ namespace Reminder
 
         static void writeList(List<ReminderItem> list)
         {
+            FileInfo dataFile = GetDataFile("data.dat");
+
             if (!File.Exists(dataFile.FullName))
             {
                 Directory.CreateDirectory(dataFile.Directory.FullName);
@@ -88,6 +100,16 @@ namespace Reminder
             }
 
             streamWriter.Close();
+        }
+        private void OnTimedEventRefreshStudyTime(Object source, ElapsedEventArgs e)
+        {
+            this.Dispatcher.Invoke(() =>
+            {
+                studyTime += DateTime.Now - timeStart;
+                timeStart = DateTime.Now;
+
+                studyTimeTextBlock.Text = $"You already studied {studyTime.ToString(@"hh\:mm\:ss")} today";
+            });
         }
 
         private void OnTimedEventRefreshReminders(Object source, ElapsedEventArgs e)
@@ -105,8 +127,6 @@ namespace Reminder
                 {
                     textBlock.Text = "Not really much to look forward too";
                 }
-                
-
                 writeList(list);
             });
         }
@@ -126,11 +146,11 @@ namespace Reminder
 
         private void Grid_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            timer[0].Stop();
-            timer[1].Stop();
+            //timer[0].Stop();
+            //timer[1].Stop();
             DragMove();
-            timer[0].Start();
-            timer[1].Start();
+            //timer[0].Start();
+            //timer[1].Start();
         }
 
         private void Rectangle_PreviewMouseLeftButtonDown_1(object sender, MouseButtonEventArgs e)
@@ -147,12 +167,194 @@ namespace Reminder
             }            
         }
 
+        TimeSpan ReadStudyTime()
+        {
+            TimeSpan timeSpan = new();
+            bool newFile = false;
+            FileInfo fileInfo = GetDataFile("studyTime.csv", out newFile);
+
+            if (!newFile)
+            {
+                bool success = false;
+                while (!success)
+                {
+                    try
+                    {
+                        StreamReader sr = new StreamReader(fileInfo.FullName);
+                        string[] buffer = sr.ReadToEnd().Split('\n');
+
+                        if (buffer.Length <= 1)
+                        {
+                            success = true;
+                            break;
+                        }
+
+                        if (buffer[buffer.Length - 1] == "")
+                            buffer = buffer[..(buffer.Length - 1)];
+
+                        string[] lastEntry = buffer[buffer.Length - 1].Split(';');
+
+                        if (checkIfToday(lastEntry[0], lastEntry[1], lastEntry[2]))
+                        {
+                            timeSpan = new TimeSpan(0, 0, (int)Convert.ToDouble(lastEntry[3]));
+                        }
+                        success = true;
+                    }
+                    catch (IOException ex)
+                    {
+                        MessageBox.Show(ex.Message, "IO Exception", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show(ex.Message, "Unhandled exception", MessageBoxButton.OK, MessageBoxImage.Error);
+                        throw;
+                    }
+                }
+            }
+
+            return timeSpan;
+        }
+
+        bool checkIfToday(string day, string month, string year)
+        {
+            DateTime today = DateTime.Now;
+            return (Convert.ToInt32(day) == today.Day && Convert.ToInt32(month) == today.Month && Convert.ToInt32(year) == today.Year) ;
+        }
+        void WriteStudyTime()
+        {
+            bool newFile;
+            FileInfo dataFile = GetDataFile("studyTime.csv", out newFile);
+
+            string[] buffer;
+
+            StreamReader streamReader;
+
+            bool success = false;
+            while (!success)
+            {
+                try
+                {
+                    streamReader = new StreamReader(dataFile.FullName);
+                    buffer = streamReader.ReadToEnd().Split('\n');
+                    streamReader.Close();
+
+                    DateTime today = DateTime.Now;
+
+                    StreamWriter sw = new StreamWriter(dataFile.FullName);
+
+                    string[] lastEntry;
+                    if (buffer.Length > 1)
+                    {
+                        if (buffer[buffer.Length - 1] == "")
+                            buffer = buffer[..(buffer.Length - 1)];
+
+                        lastEntry = buffer[buffer.Length - 1].Split(';');
+
+                        //if (Convert.ToInt32(lastEntry[0]) == today.Day && Convert.ToInt32(lastEntry[1]) == today.Month && Convert.ToInt32(lastEntry[2]) == today.Year)
+                        if (checkIfToday(lastEntry[0], lastEntry[1], lastEntry[2]))
+                        {
+                            buffer[buffer.Length - 1] = $"{lastEntry[0]};{lastEntry[1]};{lastEntry[2]};{studyTime.TotalSeconds}";
+
+                            for (int i = 0; i < buffer.Length; i++)
+                            {
+
+                                if (i == buffer.Length - 1)
+                                    sw.Write(buffer[i].Trim());
+                                else
+                                    sw.WriteLine(buffer[i].Trim());
+                            }
+                        }
+                        else
+                        {
+                            foreach (string str in buffer)
+                            {
+                                sw.WriteLine(str.Trim());
+                            }
+
+                            sw.Write($"{today.Day};{today.Month};{today.Year};{studyTime.TotalSeconds}");
+                        }
+                    }
+                    else
+                    {
+                        sw.WriteLine("day;month;year;studyTimeInSeconds");
+                        sw.Write($"{today.Day};{today.Month};{today.Year};{studyTime.TotalSeconds}");
+                    }
+
+                    success = true;
+                    sw.Close();
+                }
+                catch (IOException ex)
+                {
+                    MessageBox.Show($"Could not open/save studyTime.csv\nCheck if the file is currently in use!\n\n{ex.Message}", "IOException", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Could not open studyTime.csv\n\n{ex.Message}", "Unhandled Exception", MessageBoxButton.OK, MessageBoxImage.Error);
+                    throw;
+                }
+            }
+        }
+
+        public static System.IO.FileInfo GetDataFile(string name, out bool newFile)
+        {
+            newFile = false;
+            System.IO.FileInfo dataFile = new System.IO.FileInfo(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @$"{System.IO.Path.DirectorySeparatorChar}Reminder App{System.IO.Path.DirectorySeparatorChar}{name}");
+            if (!File.Exists(dataFile.FullName))
+            {
+                newFile = true;
+
+                Directory.CreateDirectory(dataFile.Directory.FullName);
+                File.Create(dataFile.FullName).Close();
+            }
+
+            return dataFile;
+        }
+        public static System.IO.FileInfo GetDataFile(string name)
+        {
+            System.IO.FileInfo dataFile = new System.IO.FileInfo(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @$"{System.IO.Path.DirectorySeparatorChar}Reminder App{System.IO.Path.DirectorySeparatorChar}{name}");
+            if (!File.Exists(dataFile.FullName))
+            {
+
+                Directory.CreateDirectory(dataFile.Directory.FullName);
+                File.Create(dataFile.FullName).Close();
+            }
+
+            return dataFile;
+        }
+
         private void Rectangle_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             timer[0].Stop();
             timer[1].Stop();
 
+            WriteStudyTime();
+
             this.Close();
+        }
+
+        private void studyPauseButton_Click(object sender, RoutedEventArgs e)
+        {
+            timer[2].Enabled = false;
+
+            studyResumeButton.IsEnabled = true;
+            studyResumeButton.IsChecked = false;
+            studyPauseButton.IsEnabled = false;
+
+            studyPauseButton.Foreground = Brushes.White;
+            studyResumeButton.Foreground = Brushes.Gray;
+        }
+
+        private void studyResumeButton_Click(object sender, RoutedEventArgs e)
+        {
+            timeStart = DateTime.Now;
+            timer[2].Enabled = true;
+
+            studyPauseButton.IsEnabled = true;
+            studyPauseButton.IsChecked = false;
+            studyResumeButton.IsEnabled = false;
+
+            studyPauseButton.Foreground = Brushes.Gray;
+            studyResumeButton.Foreground = Brushes.Red;
         }
     }
 }
